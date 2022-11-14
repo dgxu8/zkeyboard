@@ -1,0 +1,6 @@
+if BOARD_LEFTMK_L1
+
+config BOARD
+	default "Left mk l1"
+
+endif # BOARD_LEFTMK_L1

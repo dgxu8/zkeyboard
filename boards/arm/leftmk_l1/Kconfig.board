@@ -1,0 +1,3 @@
+config BOARD_LEFTMK_L1
+	bool "STM32L151RCT6 Left Keyboard"
+	depends on SOC_STM32L151XC

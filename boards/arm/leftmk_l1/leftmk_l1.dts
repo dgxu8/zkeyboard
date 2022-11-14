@@ -1,0 +1,116 @@
+/dts-v1/;
+#include <st/l1/stm32l151Xc.dtsi>
+#include <st/l1/stm32l151rctx-pinctrl.dtsi>
+#include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
+
+// NOTE: We are a category 3 device in the reference manual
+
+/ {
+	model = "Left MK STM32l151rc";
+	compatible = "leftmk_l1";
+
+	chosen {
+		zephyr,console = &usart3;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: ld0 {
+			gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>;
+			label = "Key LD0";
+		};
+		led1: ld1 {
+			gpios = <&gpioc 1 GPIO_ACTIVE_HIGH>;
+			label = "Key LD1";
+		};
+		col6: cl6 {
+			gpios = <&gpioc 8 (GPIO_PULL_UP | GPIO_ACTIVE_HIGH)>;
+			label = "Column 6";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		row0: rw0 {
+			label = "Row 0 Keys";
+			gpios = <&gpioa 1 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		};
+		row1: rw1 {
+			label = "Row 1 Keys";
+			gpios = <&gpioa 2 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		};
+		row2: rw2 {
+			label = "Row 2 Keys";
+			gpios = <&gpioa 3 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		};
+		row3: rw3 {
+			label = "Row 3 Keys";
+			gpios = <&gpioa 4 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		};
+		row5: rw5 {
+			label = "Row 5 Keys";
+			gpios = <&gpioa 6 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		};
+	};
+
+	soc {
+		usb: usb@40005c00 {
+			compatible = "st,stm32-usb";
+			reg = <0x40005c00 0x400>;
+			interrupts = <20 0>, <19 0>;
+			interrupt-names = "usb", "usbhp";
+			num-bidir-endpoints = <8>;
+			ram-size = <512>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00800000>;
+			status = "okay";
+		};
+	};
+
+	aliases {
+		led0 = &led0;
+		led1 = &led1;
+		col6 = &col6;
+		sw0 = &row0;
+		sw1 = &row1;
+		sw2 = &row2;
+		sw3 = &row3;
+		row5 = &row5;
+	};
+};
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(16)>;
+	status = "okay";
+};
+
+&pll {
+	div = <3>; // 4
+	mul = <6>; // 8
+	/* out of the box, MCO from stlink is not enabled, unlike later discos */
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(32)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
+
+&usart3 {
+	pinctrl-0 = <&usart3_tx_pb10 &usart3_rx_pb11>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_scl_pb6 &i2c1_sda_pb7>;
+	pinctrl-names = "default";
+	status = "disabled";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
