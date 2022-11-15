@@ -1,0 +1,145 @@
+diff --git a/drivers/usb/device/usb_dc_stm32.c b/drivers/usb/device/usb_dc_stm32.c
+index e6fcc8843c..46a51f0b2a 100644
+--- a/drivers/usb/device/usb_dc_stm32.c
++++ b/drivers/usb/device/usb_dc_stm32.c
+@@ -26,6 +26,8 @@
+ #include <zephyr/drivers/gpio.h>
+ #include <zephyr/drivers/pinctrl.h>
+ #include "stm32_hsem.h"
++#include <stm32l1xx_hal.h>
++#include <stm32l1xx_hal_cortex.h>
+ 
+ #define LOG_LEVEL CONFIG_USB_DRIVER_LOG_LEVEL
+ #include <zephyr/logging/log.h>
+@@ -383,20 +385,23 @@ static uint32_t usb_dc_stm32_get_maximum_speed(void)
+ 
+ static int usb_dc_stm32_init(void)
+ {
+-	HAL_StatusTypeDef status;
++	HAL_StatusTypeDef status = HAL_OK;
+ 	unsigned int i;
+ 
+ #if defined(USB) || defined(USB_DRD_FS)
+ #ifdef USB
++	LOG_DBG("PCD instance = USB");
+ 	usb_dc_stm32_state.pcd.Instance = USB;
+ #else
+ 	usb_dc_stm32_state.pcd.Instance = USB_DRD_FS;
+ #endif
++	LOG_DBG(">> Initing pcd");
+ 	usb_dc_stm32_state.pcd.Init.speed = PCD_SPEED_FULL;
+ 	usb_dc_stm32_state.pcd.Init.dev_endpoints = USB_NUM_BIDIR_ENDPOINTS;
+ 	usb_dc_stm32_state.pcd.Init.phy_itface = PCD_PHY_EMBEDDED;
+ 	usb_dc_stm32_state.pcd.Init.ep0_mps = PCD_EP0MPS_64;
+ 	usb_dc_stm32_state.pcd.Init.low_power_enable = 0;
++	usb_dc_stm32_state.pcd.Init.battery_charging_enable = DISABLE;
+ #else /* USB_OTG_FS || USB_OTG_HS */
+ #if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_otghs)
+ 	usb_dc_stm32_state.pcd.Instance = USB_OTG_HS;
+@@ -451,7 +456,7 @@ static int usb_dc_stm32_init(void)
+ 		return status;
+ 	}
+ 
+-	LOG_DBG("HAL_PCD_Init");
++	LOG_DBG("HAL_PCD_Init %d", USB_NUM_BIDIR_ENDPOINTS);
+ 	status = HAL_PCD_Init(&usb_dc_stm32_state.pcd);
+ 	if (status != HAL_OK) {
+ 		LOG_ERR("PCD_Init failed, %d", (int)status);
+@@ -470,6 +475,8 @@ static int usb_dc_stm32_init(void)
+ 
+ 	LOG_DBG("HAL_PCD_Start");
+ 	status = HAL_PCD_Start(&usb_dc_stm32_state.pcd);
++	//uint32_t pmic_val =  SYSCFG->PMC;
++	//LOG_DBG(">>pmic_val %u, %p", pmic_val, SYSCFG);
+ 	if (status != HAL_OK) {
+ 		LOG_ERR("PCD_Start failed, %d", (int)status);
+ 		return -EIO;
+@@ -497,6 +504,7 @@ static int usb_dc_stm32_init(void)
+ 	}
+ #endif /* USB */
+ 
++	LOG_INF(">CON> %d, %d, %p", USB_IRQ, USB_IRQ_PRI, usb_dc_stm32_isr);
+ 	IRQ_CONNECT(USB_IRQ, USB_IRQ_PRI,
+ 		    usb_dc_stm32_isr, 0, 0);
+ 	irq_enable(USB_IRQ);
+@@ -509,7 +517,7 @@ int usb_dc_attach(void)
+ {
+ 	int ret;
+ 
+-	LOG_DBG("");
++	LOG_DBG(">> Here");
+ 
+ #ifdef SYSCFG_CFGR1_USB_IT_RMP
+ 	/*
+@@ -688,6 +696,7 @@ int usb_dc_ep_configure(const struct usb_dc_ep_cfg_data * const ep_cfg)
+ 		    (usb_dc_stm32_state.pma_offset + ep_cfg->ep_mps)) {
+ 			return -EINVAL;
+ 		}
++		LOG_INF(">EP> 0x%X, 0x%X, 0x%X,", ep, PCD_SNG_BUF, usb_dc_stm32_state.pma_offset);
+ 		HAL_PCDEx_PMAConfig(&usb_dc_stm32_state.pcd, ep, PCD_SNG_BUF,
+ 				    usb_dc_stm32_state.pma_offset);
+ 		ep_state->ep_pma_buf_len = ep_cfg->ep_mps;
+@@ -1149,4 +1158,51 @@ void HAL_PCDEx_SetConnectionState(PCD_HandleTypeDef *hpcd, uint8_t state)
+ 	gpio_pin_configure_dt(&usb_disconnect,
+ 			   (state ? GPIO_OUTPUT_ACTIVE : GPIO_OUTPUT_INACTIVE));
+ }
++#else
++void HAL_PCDEx_SetConnectionState(PCD_HandleTypeDef *hpcd, uint8_t state)
++{
++	LOG_INF(">> Set State called: %u", state);
++	if (state == 1) {
++		__HAL_SYSCFG_USBPULLUP_ENABLE();
++	} else {
++		__HAL_SYSCFG_USBPULLUP_DISABLE();
++	}
++}
++
++void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
++{
++	if(pcdHandle->Instance==USB)
++	{
++		LOG_INF(">> PCD msp init");
++		__HAL_RCC_USB_CLK_ENABLE();
++
++		//HAL_NVIC_SetPriority(USB_LP_IRQn, 0, 0);
++		//HAL_NVIC_EnableIRQ(USB_LP_IRQn);
++
++		//HAL_NVIC_SetPriority(USB_HP_IRQn, 0, 0);
++		//HAL_NVIC_EnableIRQ(USB_HP_IRQn);
++
++	}
++}
++
++void HAL_PCD_MspDeInit(PCD_HandleTypeDef* pcdHandle)
++{
++  if(pcdHandle->Instance==USB)
++  {
++  /* USER CODE BEGIN USB_MspDeInit 0 */
++
++  /* USER CODE END USB_MspDeInit 0 */
++    /* Peripheral clock disable */
++    __HAL_RCC_USB_CLK_DISABLE();
++
++    /* Peripheral interrupt Deinit*/
++    //HAL_NVIC_DisableIRQ(USB_LP_IRQn);
++    //HAL_NVIC_DisableIRQ(USB_HP_IRQn);
++
++  /* USER CODE BEGIN USB_MspDeInit 1 */
++
++  /* USER CODE END USB_MspDeInit 1 */
++  }
++
++}
+ #endif /* USB && DT_INST_NODE_HAS_PROP(0, disconnect_gpios) */
+diff --git a/soc/arm/st_stm32/stm32l1/Kconfig.series b/soc/arm/st_stm32/stm32l1/Kconfig.series
+index d21881d612..54f99c19ef 100644
+--- a/soc/arm/st_stm32/stm32l1/Kconfig.series
++++ b/soc/arm/st_stm32/stm32l1/Kconfig.series
+@@ -11,6 +11,7 @@ config SOC_SERIES_STM32L1X
+ 	select SOC_FAMILY_STM32
+ 	select HAS_STM32CUBE
+ 	select HAS_SWO
++	select USE_STM32_HAL_CORTEX
+ 	select CPU_HAS_ARM_MPU
+ 	help
+ 	  Enable support for STM32L1 MCU series
