@@ -8,4 +8,4 @@ list(APPEND CONF_FILE "debug.conf")
 find_package(Zephyr)
 project(zkeyboard_app)
 
-target_sources(zkeyboard PRIVATE src/main.c)
+target_sources(app PRIVATE src/main.c)
