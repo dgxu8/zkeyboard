@@ -11,6 +11,9 @@ CONFIG_CLOCK_CONTROL=y
 # enable pin controller
 CONFIG_PINCTRL=y
 
+# Enable kscan
+CONFIG_KSCAN=y
+
 # Mouse
 CONFIG_USB_DEVICE_STACK=y
 CONFIG_USB_DEVICE_HID=y

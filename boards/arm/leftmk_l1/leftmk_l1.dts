@@ -13,6 +13,7 @@
 		zephyr,console = &usart3;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
+		zephyr,keyboard-scan = &kscan0;
 	};
 
 	leds {
@@ -25,34 +26,44 @@
 			gpios = <&gpioc 1 GPIO_ACTIVE_HIGH>;
 			label = "Key LD1";
 		};
-		col6: cl6 {
-			gpios = <&gpioc 8 (GPIO_PULL_UP | GPIO_ACTIVE_HIGH)>;
-			label = "Column 6";
+		led2: ld2 {
+			gpios = <&gpioc 2 GPIO_ACTIVE_HIGH>;
+			label = "Key LD2";
+		};
+		led3: ld3 {
+			gpios = <&gpioc 3 GPIO_ACTIVE_HIGH>;
+			label = "Key LD3";
+		};
+		led4: ld4 {
+			gpios = <&gpioc 4 GPIO_ACTIVE_HIGH>;
+			label = "Key LD4";
+		};
+		led5: ld5 {
+			gpios = <&gpioc 5 GPIO_ACTIVE_HIGH>;
+			label = "Key LD5";
+		};
+		caps0: cps0 {
+			gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
+			label = "Key Caps";
 		};
 	};
 
-	gpio_keys {
-		compatible = "gpio-keys";
-		row0: rw0 {
-			label = "Row 0 Keys";
-			gpios = <&gpioa 1 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		};
-		row1: rw1 {
-			label = "Row 1 Keys";
-			gpios = <&gpioa 2 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		};
-		row2: rw2 {
-			label = "Row 2 Keys";
-			gpios = <&gpioa 3 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		};
-		row3: rw3 {
-			label = "Row 3 Keys";
-			gpios = <&gpioa 4 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		};
-		row5: rw5 {
-			label = "Row 5 Keys";
-			gpios = <&gpioa 6 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		};
+	kscan0: kscan_0 {
+		compatible = "zephyr,gpio-kscan";
+
+		col-gpios = <&gpioc 14 (GPIO_ACTIVE_HIGH)>,
+			<&gpioc 13 (GPIO_ACTIVE_HIGH)>,
+			<&gpioc 12 (GPIO_ACTIVE_HIGH)>,
+			<&gpioc 11 (GPIO_ACTIVE_HIGH)>,
+			<&gpioc 10 (GPIO_ACTIVE_HIGH)>,
+			<&gpioc 9 (GPIO_ACTIVE_HIGH)>,
+			<&gpioc 8 (GPIO_ACTIVE_HIGH)>;
+		row-gpios = <&gpioa 1 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			<&gpioa 2 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			<&gpioa 3 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			<&gpioa 4 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			<&gpioa 5 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
+			<&gpioa 6 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
 	};
 
 	soc {
@@ -71,12 +82,12 @@
 	aliases {
 		led0 = &led0;
 		led1 = &led1;
-		col6 = &col6;
-		sw0 = &row0;
-		sw1 = &row1;
-		sw2 = &row2;
-		sw3 = &row3;
-		row5 = &row5;
+		led2 = &led2;
+		led3 = &led3;
+		led4 = &led4;
+		led5 = &led5;
+		caps0 = &caps0;
+		kscan0 = &kscan0;
 	};
 };
 
