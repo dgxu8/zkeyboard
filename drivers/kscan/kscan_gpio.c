@@ -58,7 +58,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 
 	LOG_INF("Starting poll...");
 	while (true) {
-		k_msleep(1);
+		k_usleep(200);
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);
 			continue;
@@ -67,7 +67,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 			if (gpio_pin_set_dt(&cols[c], 1)) {
 				LOG_ERR("Failed to set gpio %d", c);
 			}
-			k_busy_wait(100);
+			k_busy_wait(1);
 			for (r = 0; r < ROW_COUNT; r++) {
 				val = gpio_pin_get_dt(&rows[r]);
 				data->callback(dev, r, c, val);
