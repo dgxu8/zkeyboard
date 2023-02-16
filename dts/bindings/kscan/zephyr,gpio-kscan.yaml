@@ -1,0 +1,20 @@
+description: |
+  :placeholder:
+
+  Example definition in devicetree:
+    :placeholder:
+
+compatible: "zephyr,gpio-kscan"
+
+include: base.yaml
+
+properties:
+  col-gpios:
+    type: phandle-array
+    required: true
+    description: Column GPIO to be driven
+
+  row-gpios:
+    type: phandle-array
+    required: true
+    description: Row GPIO to be read

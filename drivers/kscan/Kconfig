@@ -1,0 +1,7 @@
+config KSCAN_GPIO
+	bool "GPIO based keyboard scan"
+	default y
+	depends on DT_HAS_GPIO_KSCAN_ENABLED
+	select GPIO
+	help
+	  Enable GPIO KSCAN
