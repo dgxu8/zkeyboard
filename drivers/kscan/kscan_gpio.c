@@ -49,6 +49,9 @@ static int init_gpio_list(struct gpio_dt_spec const *const gpios, size_t len, gp
 }
 
 static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
+	ARG_UNUSED(dummy2);
+	ARG_UNUSED(dummy3);
+
 	int val;
 	uint32_t c, r;
 	struct kscan_gpio_data *const data = dev->data;
