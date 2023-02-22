@@ -19,7 +19,9 @@
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
 
+/*******************************************************************/
 /* Defines */
+
 #define LEDS_LEN 6
 #define CAPS_NODE DT_ALIAS(caps0)
 
@@ -37,7 +39,9 @@ LOG_MODULE_REGISTER(main);
 #define GPIO_SPEC(node_id) GPIO_DT_SPEC_GET_OR(node_id, gpios, {0})
 #define LED_LISTIFY(i, _) GPIO_SPEC(DT_ALIAS(led##i))
 
+/*******************************************************************/
 /* Local Variables */
+
 // Keyscan releated items
 static K_SEM_DEFINE(kscan_sem, 0, 1);
 static const struct gpio_dt_spec leds[] = {LISTIFY(LEDS_LEN, LED_LISTIFY, (,))};
@@ -86,16 +90,33 @@ static const uint8_t hid_kbd_report_desc[] = {
 };
 
 static void in_ready_cb(const struct device *dev);
+static void out_ready_cb(const struct device *dev);
 static const struct hid_ops kbd_ops = {
 	.int_in_ready = in_ready_cb,
+	.int_out_ready = out_ready_cb,
 };
 
+/*******************************************************************/
 /* Functions */
 
 static void in_ready_cb(const struct device *dev) {
 	ARG_UNUSED(dev);
 	LOG_INF(">> USB in ready");
 	k_sem_give(&usb_sem);
+}
+
+static void out_ready_cb(const struct device *dev) {
+	uint8_t data;
+	uint32_t ret;
+	if (hid_int_ep_read(dev, &data, sizeof(data), &ret) < 0) {
+		LOG_ERR(">> Failed to read out ep");
+	}
+	if (ret > 0) {
+		LOG_INF(">> USB out size = %u, val = %u", ret, data);
+		gpio_pin_set_dt(&caps, data & 0x2);
+	} else {
+		LOG_INF("USB out nothing ret");
+	}
 }
 
 static void status_cb(enum usb_dc_status_code status, const uint8_t *param) {
@@ -105,10 +126,13 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param) {
 static void kb_callback(const struct device *dev, uint32_t row, uint32_t col,
 			bool pressed) {
 	ARG_UNUSED(dev);
+	static bool prev_state = true;
 	if (col == 0 && row == 0) {
 		gpio_pin_set_dt(&leds[0], (int)pressed);
-		if (pressed)
+		if (pressed == prev_state) {
+			prev_state = !prev_state;
 			k_sem_give(&kscan_sem);
+		}
 	} else if (col == 1 && row == 0) {
 		gpio_pin_set_dt(&leds[1], (int)pressed);
 	} else if (col == 2 && row == 0) {
@@ -180,10 +204,10 @@ void main(void) {
 		report[2] = 1;
 
 		k_sem_take(&kscan_sem, K_FOREVER);
-		gpio_pin_toggle_dt(&caps);
 		k_sem_take(&usb_sem, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
 
+		k_sem_take(&kscan_sem, K_FOREVER);
 		report[2] = 0;
 		k_sem_take(&usb_sem, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
