@@ -1,0 +1,78 @@
+#include <st/l1/stm32l151rctx-pinctrl.dtsi>
+#include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
+
+&pinctrl {
+	kscan_col0: kscan_col0 {
+		pinmux = <STM32_PINMUX('C', 14, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_col1: kscan_col1 {
+		pinmux = <STM32_PINMUX('C', 13, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_col2: kscan_col2 {
+		pinmux = <STM32_PINMUX('C', 12, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_col3: kscan_col3 {
+		pinmux = <STM32_PINMUX('C', 11, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_col4: kscan_col4 {
+		pinmux = <STM32_PINMUX('C', 10, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_col5: kscan_col5 {
+		pinmux = <STM32_PINMUX('C', 9, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_col6: kscan_col6 {
+		pinmux = <STM32_PINMUX('C', 8, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	kscan_row0: kscan_row0 {
+		pinmux = <STM32_PINMUX('A', 1, GPIO)>;
+		bias-pull-down;
+	};
+	kscan_row1: kscan_row1 {
+		pinmux = <STM32_PINMUX('A', 2, GPIO)>;
+		bias-pull-down;
+	};
+	kscan_row2: kscan_row2 {
+		pinmux = <STM32_PINMUX('A', 3, GPIO)>;
+		bias-pull-down;
+	};
+	kscan_row3: kscan_row3 {
+		pinmux = <STM32_PINMUX('A', 4, GPIO)>;
+		bias-pull-down;
+	};
+	kscan_row4: kscan_row4 {
+		pinmux = <STM32_PINMUX('A', 5, GPIO)>;
+		bias-pull-down;
+	};
+	kscan_row5: kscan_row5 {
+		pinmux = <STM32_PINMUX('A', 6, GPIO)>;
+		bias-pull-down;
+	};
+};

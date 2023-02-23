@@ -3,6 +3,7 @@
 #include <zephyr/sys/atomic.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/kscan.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
@@ -21,6 +22,8 @@ LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 struct kscan_gpio_config {
 	struct gpio_dt_spec col_gpios[COL_COUNT];
 	struct gpio_dt_spec row_gpios[ROW_COUNT];
+
+	const struct pinctrl_dev_config *pcfg;
 };
 
 struct kscan_gpio_data {
@@ -89,6 +92,11 @@ static int gpio_kscan_init(const struct device *dev) {
 	const struct kscan_gpio_config *const cfg = dev->config;
 	struct kscan_gpio_data *const data = dev->data;
 
+	if (pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT) < 0) {
+		LOG_ERR("Failed to apply pinctrl");
+		return -ENODEV;
+	}
+
 	if (init_gpio_list(cfg->col_gpios, COL_COUNT, GPIO_OUTPUT_LOW)) {
 		return -ENODEV;
 	}
@@ -128,10 +136,12 @@ static const struct kscan_driver_api kscan_gpio_driver_api = {
 	.disable_callback = gpio_kscan_disable_callback,
 };
 
+PINCTRL_DT_INST_DEFINE(0);
 static struct kscan_gpio_data kbd_data;
 static struct kscan_gpio_config kscan_gpio_cfg_0 = {
 	.col_gpios = {LISTIFY(COL_COUNT, KSCAN_GET_GPIO, (,), col_gpios)},
 	.row_gpios = {LISTIFY(ROW_COUNT, KSCAN_GET_GPIO, (,), row_gpios)},
+	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0),
 };
 
 DEVICE_DT_INST_DEFINE(0, &gpio_kscan_init, NULL, &kbd_data,

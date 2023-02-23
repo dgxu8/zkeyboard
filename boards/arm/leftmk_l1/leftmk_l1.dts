@@ -3,6 +3,8 @@
 #include <st/l1/stm32l151rctx-pinctrl.dtsi>
 #include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
 
+#include "leftmk_l1-pinctrl.dtsi"
+
 // NOTE: We are a category 3 device in the reference manual
 
 / {
@@ -50,6 +52,22 @@
 
 	kscan0: kscan_0 {
 		compatible = "zephyr,gpio-kscan";
+		pinctrl-0 = < \
+			&kscan_col0 \
+			&kscan_col1 \
+			&kscan_col2 \
+			&kscan_col3 \
+			&kscan_col4 \
+			&kscan_col5 \
+			&kscan_col6 \
+			&kscan_row0 \
+			&kscan_row1 \
+			&kscan_row2 \
+			&kscan_row3 \
+			&kscan_row4 \
+			&kscan_row5 \
+			>;
+		pinctrl-names = "default";
 
 		col-gpios = <&gpioc 14 (GPIO_ACTIVE_HIGH)>,
 			<&gpioc 13 (GPIO_ACTIVE_HIGH)>,
