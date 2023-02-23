@@ -27,6 +27,8 @@ struct kscan_gpio_config {
 };
 
 struct kscan_gpio_data {
+	bool prev_state[COL_COUNT][ROW_COUNT];
+
 	kscan_callback_t callback;
 	struct k_thread thread;
 	atomic_t enable;
@@ -55,31 +57,48 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 	ARG_UNUSED(dummy2);
 	ARG_UNUSED(dummy3);
 
-	int val;
-	uint32_t c, r;
+	int ret;
 	struct kscan_gpio_data *const data = dev->data;
 	struct kscan_gpio_config const *const cfg = dev->config;
 	struct gpio_dt_spec const *const cols = cfg->col_gpios;
-	struct gpio_dt_spec const *const rows = cfg->row_gpios;
+	struct device const *const rows_port = cfg->row_gpios[0].port;
+
+	gpio_port_value_t val;
 
 	LOG_INF("Starting poll...");
 	while (true) {
-		k_usleep(200);
+		k_usleep(50);
+		k_yield();
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);
 			continue;
 		}
-		for (c = 0; c < COL_COUNT; c++) {
-			if (gpio_pin_set_dt(&cols[c], 1)) {
+		for (int c = 0; c < COL_COUNT; c++) {
+			ret = gpio_pin_set_dt(&cols[c], 1);
+			if (unlikely(ret < 0)) {
 				LOG_ERR("Failed to set gpio %d", c);
+				break;
 			}
-			k_busy_wait(1);
-			for (r = 0; r < ROW_COUNT; r++) {
-				val = gpio_pin_get_dt(&rows[r]);
-				data->callback(dev, r, c, val);
+
+			//k_busy_wait(1);
+			ret = gpio_port_get_raw(rows_port, &val);
+			if (unlikely(ret < 0)) {
+				LOG_ERR("Failed to read port");
+				break;
 			}
-			if (gpio_pin_set_dt(&cols[c], 0)) {
-				LOG_ERR("Failed to unset gpio %d", c);
+			val >>= 1;
+			for (int r = 0; r < ROW_COUNT; r++) {
+				if (data->prev_state[c][r] != (val & 1)) {
+					data->prev_state[c][r] = val & 1;
+					data->callback(dev, r, c, val & 1);
+				}
+				val >>= 1;
+			}
+
+			ret = gpio_pin_set_dt(&cols[c], 0);
+			if (unlikely(ret < 0)) {
+				LOG_ERR("Failed to set gpio %d", c);
+				break;
 			}
 		}
 	}
@@ -105,6 +124,8 @@ static int gpio_kscan_init(const struct device *dev) {
 	}
 
 	data->enable = ATOMIC_INIT(0);
+	memset(data->prev_state, 0, sizeof(data->prev_state));
+
 	k_thread_create(&data->thread, data->thread_stack, TASK_STACK_SIZE,
 		      (k_thread_entry_t)polling_task, (void *)dev, NULL, NULL,
 		      K_PRIO_COOP(4), 0, K_NO_WAIT);

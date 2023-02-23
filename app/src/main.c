@@ -193,6 +193,7 @@ void main(void) {
 		return;
 	}
 	k_busy_wait(USEC_PER_SEC);
+	LOG_INF("}} %u", sys_clock_hw_cycles_per_sec());
 	kscan_enable_callback(kscan_dev);
 
 
@@ -201,14 +202,15 @@ void main(void) {
 	// [Modifiers]  [  Keycode bitmap    ]
 	//  00000000    00000000 10000000 ... = e (Usage ID 0x08)
 	while (true) {
+		k_yield();
 		report[2] = 1;
-
 		k_sem_take(&kscan_sem, K_FOREVER);
 		k_sem_take(&usb_sem, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
 
-		k_sem_take(&kscan_sem, K_FOREVER);
+		k_yield();
 		report[2] = 0;
+		k_sem_take(&kscan_sem, K_FOREVER);
 		k_sem_take(&usb_sem, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
 	}
