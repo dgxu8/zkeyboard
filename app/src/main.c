@@ -39,6 +39,10 @@ LOG_MODULE_REGISTER(main);
 #define GPIO_SPEC(node_id) GPIO_DT_SPEC_GET_OR(node_id, gpios, {0})
 #define LED_LISTIFY(i, _) GPIO_SPEC(DT_ALIAS(led##i))
 
+// Macro for converting keycodes to a bitmask
+#define REPORT_IDX(c) ((c / 8) + 1)
+#define REPORT_MASK(c) (0x1 << (c % 8))
+
 /*******************************************************************/
 /* Local Variables */
 
@@ -89,6 +93,26 @@ static const uint8_t hid_kbd_report_desc[] = {
 	HID_END_COLLECTION,					\
 };
 
+// Table for keymasks
+static uint8_t keymask[6][7] = {
+	{HID_KEY_ESC,	      HID_KEY_F1, HID_KEY_F2, HID_KEY_F3, HID_KEY_F4,	 HID_KEY_F5, HID_KEY_5},
+	{	   0,	   HID_KEY_GRAVE,  HID_KEY_1,  HID_KEY_2,  HID_KEY_3,	  HID_KEY_4, HID_KEY_T},
+	{	   0,	     HID_KEY_TAB,  HID_KEY_Q,  HID_KEY_W,  HID_KEY_E,	  HID_KEY_R, HID_KEY_G},
+	{	   0,	HID_KEY_CAPSLOCK,  HID_KEY_A,  HID_KEY_S,  HID_KEY_D,	  HID_KEY_F, HID_KEY_B},
+	{	   0,	    /*Lshift*/ 0,  HID_KEY_Z,  HID_KEY_X,  HID_KEY_C,	  HID_KEY_V, HID_KEY_SPACE},
+	{	   0,	     /*Lctrl*/ 0,  /*Lui*/ 0,  /*mod*/ 0, /*Lalt*/ 0, HID_KEY_SPACE, HID_KEY_SPACE},
+};
+static uint8_t modkeys[6][7] = {
+	{0, 0, 0, 0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0},
+	{0, HID_KBD_MODIFIER_LEFT_SHIFT, 0, 0, 0, 0, 0},
+	{0, HID_KBD_MODIFIER_LEFT_CTRL, HID_KBD_MODIFIER_LEFT_UI, 0, HID_KBD_MODIFIER_LEFT_ALT, 0, 0},
+};
+static uint8_t report[14] = {0};
+
+// HID ops
 static void in_ready_cb(const struct device *dev);
 static void out_ready_cb(const struct device *dev);
 static const struct hid_ops kbd_ops = {
@@ -101,7 +125,7 @@ static const struct hid_ops kbd_ops = {
 
 static void in_ready_cb(const struct device *dev) {
 	ARG_UNUSED(dev);
-	LOG_INF(">> USB in ready");
+	LOG_DBG(">> USB in ready");
 	k_sem_give(&usb_sem);
 }
 
@@ -126,24 +150,22 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param) {
 static void kb_callback(const struct device *dev, uint32_t row, uint32_t col,
 			bool pressed) {
 	ARG_UNUSED(dev);
-	static bool prev_state = true;
-	if (col == 0 && row == 0) {
-		gpio_pin_set_dt(&leds[0], (int)pressed);
-		if (pressed == prev_state) {
-			prev_state = !prev_state;
-			k_sem_give(&kscan_sem);
+
+	uint_fast8_t kcode = keymask[row][col];
+	if (kcode == 0) {
+		if (pressed) {
+			report[0] |= modkeys[row][col];
+		} else {
+			report[0] &= ~modkeys[row][col];
 		}
-	} else if (col == 1 && row == 0) {
-		gpio_pin_set_dt(&leds[1], (int)pressed);
-	} else if (col == 2 && row == 0) {
-		gpio_pin_set_dt(&leds[2], (int)pressed);
-	} else if (col == 3 && row == 0) {
-		gpio_pin_set_dt(&leds[3], (int)pressed);
-	} else if (col == 4 && row == 0) {
-		gpio_pin_set_dt(&leds[4], (int)pressed);
-	} else if (col == 6 && row == 5) {
-		gpio_pin_set_dt(&leds[5], (int)pressed);
+	} else {
+		if (pressed) {
+			report[REPORT_IDX(kcode)] |= REPORT_MASK(kcode);
+		} else {
+			report[REPORT_IDX(kcode)] &= ~REPORT_MASK(kcode);
+		}
 	}
+	k_sem_give(&kscan_sem);
 }
 
 static int configure_leds(const struct gpio_dt_spec * const gpio) {
@@ -198,18 +220,8 @@ void main(void) {
 
 
 	LOG_INF(">> Starting main loop");
-	uint8_t report[14] = {0};
-	// [Modifiers]  [  Keycode bitmap    ]
-	//  00000000    00000000 10000000 ... = e (Usage ID 0x08)
 	while (true) {
 		k_yield();
-		report[2] = 1;
-		k_sem_take(&kscan_sem, K_FOREVER);
-		k_sem_take(&usb_sem, K_FOREVER);
-		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
-
-		k_yield();
-		report[2] = 0;
 		k_sem_take(&kscan_sem, K_FOREVER);
 		k_sem_take(&usb_sem, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
