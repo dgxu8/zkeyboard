@@ -28,6 +28,7 @@ struct kscan_gpio_config {
 
 struct kscan_gpio_data {
 	bool prev_state[COL_COUNT][ROW_COUNT];
+	uint8_t debounce[COL_COUNT][ROW_COUNT];
 
 	kscan_callback_t callback;
 	struct k_thread thread;
@@ -86,11 +87,15 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 				LOG_ERR("Failed to read port");
 				break;
 			}
+
 			val >>= 1;
 			for (int r = 0; r < ROW_COUNT; r++) {
-				if (data->prev_state[c][r] != (val & 1)) {
+				if (data->prev_state[c][r] != (val & 1) && data->debounce[c][r] == 0) {
+					data->debounce[c][r] = 10;
 					data->prev_state[c][r] = val & 1;
 					data->callback(dev, r, c, val & 1);
+				} else if (data->debounce[c][r] > 0) {
+					data->debounce[c][r]--;
 				}
 				val >>= 1;
 			}
@@ -125,6 +130,7 @@ static int gpio_kscan_init(const struct device *dev) {
 
 	data->enable = ATOMIC_INIT(0);
 	memset(data->prev_state, 0, sizeof(data->prev_state));
+	memset(data->debounce, 0, sizeof(data->debounce));
 
 	k_thread_create(&data->thread, data->thread_stack, TASK_STACK_SIZE,
 		      (k_thread_entry_t)polling_task, (void *)dev, NULL, NULL,
