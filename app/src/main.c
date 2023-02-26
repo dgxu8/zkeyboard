@@ -15,6 +15,8 @@
 
 #include <stm32l1xx_hal.h>
 
+#include "drivers/kscan_gpio.h"
+
 #include <zephyr/logging/log.h>
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(main);
@@ -97,7 +99,7 @@ static const uint8_t hid_kbd_report_desc[] = {
 };
 
 // Table for keymasks
-static uint8_t keymask[6][7] = {
+static uint8_t keymask[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
 	{HID_KEY_ESC,	      HID_KEY_F1, HID_KEY_F2, HID_KEY_F3, HID_KEY_F4,	 HID_KEY_F5, HID_KEY_5},
 	{	   0,	   HID_KEY_GRAVE,  HID_KEY_1,  HID_KEY_2,  HID_KEY_3,	  HID_KEY_4, HID_KEY_T},
 	{	   0,	     HID_KEY_TAB,  HID_KEY_Q,  HID_KEY_W,  HID_KEY_E,	  HID_KEY_R, HID_KEY_G},
@@ -105,7 +107,7 @@ static uint8_t keymask[6][7] = {
 	{	   0,	    /*Lshift*/ 0,  HID_KEY_Z,  HID_KEY_X,  HID_KEY_C,	  HID_KEY_V, HID_KEY_SPACE},
 	{	   0,	     /*Lctrl*/ 0,  /*Lui*/ 0,  /*mod*/ 0, /*Lalt*/ 0, HID_KEY_SPACE, HID_KEY_SPACE},
 };
-static uint8_t modkeys[6][7] = {
+static uint8_t modkeys[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
 	{0, 0, 0, 0, 0, 0, 0},
 	{0, 0, 0, 0, 0, 0, 0},
 	{0, 0, 0, 0, 0, 0, 0},

@@ -7,6 +7,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
+#include "drivers/kscan_gpio.h"
+
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 
@@ -15,6 +17,10 @@ LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 
 #define COL_COUNT DT_INST_PROP_LEN(0, col_gpios)
 #define ROW_COUNT DT_INST_PROP_LEN(0, row_gpios)
+BUILD_ASSERT(COL_COUNT == KSCAN_COL_LEN,
+	"col len set in header is not the same as in the driver");
+BUILD_ASSERT(ROW_COUNT == KSCAN_ROW_LEN,
+	"row len set in header is not the same as in the driver");
 
 #define KSCAN_GET_GPIO(idx, prop) GPIO_DT_SPEC_INST_GET_BY_IDX(0, prop, idx)
 
