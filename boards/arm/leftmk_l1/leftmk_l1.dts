@@ -15,7 +15,8 @@
 		zephyr,console = &cdc_acm_uart0;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
-		zephyr,keyboard-scan = &kscan0;
+		zephyr,kscan-gpio = &kscan0;
+		zephyr,kscan-uart = &kscan1;
 	};
 
 	leds {
@@ -134,7 +135,23 @@
 	pinctrl-0 = <&usart3_tx_pb10 &usart3_rx_pb11>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
-	status = "disabled";
+	dmas = <&dma1 2 0x20440>,
+		<&dma1 3 0x20480>;
+	dma-names = "tx", "rx";
+	status = "okay";
+
+	kscan1: kscan_1 {
+		compatible = "zephyr,uart-kscan";
+		pinctrl-0 = <&coproc_boot0 &coproc_reset>;
+		pinctrl-names = "default";
+
+		boot0-gpios = <&gpiob 13 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpiob 12 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&dma1 {
+	status = "okay";
 };
 
 &i2c1 {

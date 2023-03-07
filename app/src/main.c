@@ -8,8 +8,8 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/kscan.h>
+#include <zephyr/drivers/uart.h>
 #include <zephyr/sys/util.h>
-
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/class/usb_hid.h>
 
@@ -55,9 +55,10 @@ BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
 static K_SEM_DEFINE(kscan_sem, 0, 1);
 static const struct gpio_dt_spec leds[] = {LISTIFY(LEDS_LEN, LED_LISTIFY, (,))};
 static const struct gpio_dt_spec caps = GPIO_SPEC(CAPS_NODE);
-static const struct device *const kscan_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_keyboard_scan));
+static const struct device *const kscan_gpio_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_kscan_gpio));
+static const struct device *const kscan_uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_kscan_uart));
 
-// USB related items
+// USB related items, default to 1 so someone can grab it
 static K_SEM_DEFINE(usb_sem, 1, 1);
 // Custom keyboard report descriptor to allow for a n-key rollover
 static const uint8_t hid_kbd_report_desc[] = {
@@ -209,9 +210,12 @@ void main(void) {
 
 	// Configure KSCAN
 	LOG_INF(">> Configuring kscan");
-	if (kscan_config(kscan_dev, kb_callback) < 0) {
+	if (kscan_config(kscan_gpio_dev, kb_callback) < 0) {
 		LOG_ERR("Failed to configure kscan");
 		return;
+	}
+	if (kscan_config(kscan_uart_dev, NULL) < 0) {
+		LOG_ERR("Failed to configure uart kscan");
 	}
 
 	// Enable everything
@@ -221,12 +225,16 @@ void main(void) {
 	}
 	k_busy_wait(USEC_PER_SEC);
 	LOG_INF("}} %u", sys_clock_hw_cycles_per_sec());
-	kscan_enable_callback(kscan_dev);
+	kscan_enable_callback(kscan_gpio_dev);
 
+	gpio_pin_set_dt(&leds[0], 1);
+	kscan_enable_callback(kscan_uart_dev);
+	gpio_pin_set_dt(&leds[1], 1);
 
 	LOG_INF(">> Starting main loop");
 	while (true) {
 		k_yield();
+
 		k_sem_take(&kscan_sem, K_FOREVER);
 		k_sem_take(&usb_sem, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);

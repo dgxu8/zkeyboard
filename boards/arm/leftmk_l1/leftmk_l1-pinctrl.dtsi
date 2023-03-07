@@ -75,4 +75,19 @@
 		pinmux = <STM32_PINMUX('A', 6, GPIO)>;
 		bias-pull-down;
 	};
+
+	coproc_boot0: coproc_boot0 {
+		pinmux = <STM32_PINMUX('B', 13, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
+	coproc_reset: coproc_reset {
+		pinmux = <STM32_PINMUX('B', 12, GPIO)>;
+		bias-disable;
+		drive-push-pull;
+		output-high;
+		slew-rate = "very-high-speed";
+	};
 };
