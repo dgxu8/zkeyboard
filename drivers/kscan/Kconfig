@@ -5,3 +5,11 @@ config KSCAN_GPIO
 	select GPIO
 	help
 	  Enable GPIO KSCAN
+
+config KSCAN_UART
+	bool "UART com for keyboard scan"
+	default y
+	depends on DT_HAS_UART_KSCAN_ENABLED
+	select SERIAL
+	help
+	  Enable UART KSCAN
