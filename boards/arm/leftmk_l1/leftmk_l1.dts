@@ -138,6 +138,7 @@
 	dmas = <&dma1 2 0x20440>,
 		<&dma1 3 0x20480>;
 	dma-names = "tx", "rx";
+	parity = "even";
 	status = "okay";
 
 	kscan1: kscan_1 {

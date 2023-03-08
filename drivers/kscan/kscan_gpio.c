@@ -74,7 +74,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 
 	LOG_INF("Starting poll...");
 	while (true) {
-		k_usleep(50);
+		k_usleep(10);
 		k_yield();
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);

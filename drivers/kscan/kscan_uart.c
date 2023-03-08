@@ -48,23 +48,36 @@ static void rkey_read_callback(const struct device *dev, struct uart_event *evt,
 void uart_scan(const struct device *dev, void *dummy2, void *dummy3) {
 	//const struct kscan_uart_config *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
+	int ret;
 	uint8_t rx_buf[8] = {0};
-	uint64_t raw = 0;
+	uint64_t raw, diff;
 
+	raw = 0;
 	while (true) {
-		k_usleep(50);
+		k_usleep(10);
 		k_yield();
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);
 			continue;
 		}
-		if (uart_rx_enable(data->dev, rx_buf, sizeof(rx_buf), SYS_FOREVER_MS) < 0) {
+		ret = uart_rx_enable(data->dev, rx_buf, sizeof(rx_buf), SYS_FOREVER_MS);
+		if (unlikely(ret < 0)) {
 			LOG_ERR("rx enable failed");
 			continue;
 		}
 		k_sem_take(&data->rx_sem, K_FOREVER);
 		memcpy(&raw, rx_buf, sizeof(rx_buf));
+
 		LOG_INF(">data> 0x%llX", raw);
+		diff = raw ^ data->prev_state;
+		if (diff != 0) {
+			for (int i = 0; i < 64; i++) {
+				if ((diff >> i) & 1) {
+					data->callback(dev, i, 0, (raw >> i) & 1);
+				}
+			}
+			data->prev_state = raw;
+		}
 	}
 }
 
