@@ -105,8 +105,8 @@ static uint8_t keymask[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
 	{	   0,	   HID_KEY_GRAVE,  HID_KEY_1,  HID_KEY_2,  HID_KEY_3,	  HID_KEY_4, HID_KEY_T},
 	{	   0,	     HID_KEY_TAB,  HID_KEY_Q,  HID_KEY_W,  HID_KEY_E,	  HID_KEY_R, HID_KEY_G},
 	{	   0,	HID_KEY_CAPSLOCK,  HID_KEY_A,  HID_KEY_S,  HID_KEY_D,	  HID_KEY_F, HID_KEY_B},
-	{	   0,	    /*Lshift*/ 0,  HID_KEY_Z,  HID_KEY_X,  HID_KEY_C,	  HID_KEY_V, HID_KEY_SPACE},
-	{	   0,	     /*Lctrl*/ 0,  /*Lui*/ 0,  /*mod*/ 0, /*Lalt*/ 0, HID_KEY_SPACE, HID_KEY_SPACE},
+	{	   0,	    /*Lshift*/ 0,  HID_KEY_Z,  HID_KEY_X,  HID_KEY_C,	  HID_KEY_V, HID_KEY_UP},
+	{	   0,	     /*Lctrl*/ 0,  /*Lui*/ 0,  /*mod*/ 0, /*Lalt*/ 0, HID_KEY_SPACE, HID_KEY_ENTER},
 };
 static uint8_t modkeys[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
 	{0, 0, 0, 0, 0, 0, 0},
@@ -117,6 +117,30 @@ static uint8_t modkeys[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
 	{0, HID_KBD_MODIFIER_LEFT_CTRL, HID_KBD_MODIFIER_LEFT_UI, 0, HID_KBD_MODIFIER_LEFT_ALT, 0, 0},
 };
 static uint8_t report[14] = {0};
+
+typedef struct {
+	enum hid_kbd_code code;
+	enum hid_kbd_modifier mod;
+} key_t;
+
+
+static key_t coproc_keymask[] = {
+/*0*/	{HID_KEY_F6, 0}, {HID_KEY_6, 0}, {HID_KEY_Y, 0}, {HID_KEY_H, 0}, 		{HID_KEY_N, 0}, 	{0, 0},
+/*1*/	{HID_KEY_F7, 0}, {HID_KEY_7, 0}, {HID_KEY_U, 0}, {HID_KEY_J, 0}, 		{HID_KEY_M, 0}, 	{HID_KEY_SPACE, 0},
+/*2*/	{HID_KEY_F8, 0}, {HID_KEY_8, 0}, {HID_KEY_I, 0}, {HID_KEY_K, 0}, 		{HID_KEY_COMMA, 0},	{0, HID_KBD_MODIFIER_RIGHT_ALT},
+/*3*/	{HID_KEY_F9, 0}, {HID_KEY_9, 0}, {HID_KEY_O, 0}, {HID_KEY_L, 0}, 		{HID_KEY_DOT, 0}, 	{0, HID_KBD_MODIFIER_RIGHT_UI},
+/*4*/	{HID_KEY_F10, 0}, {HID_KEY_0, 0}, {HID_KEY_P, 0}, {HID_KEY_SEMICOLON, 0},	{HID_KEY_SLASH, 0}, 	{0, 0},
+
+/*5*/	{HID_KEY_F11, 0}, {HID_KEY_MINUS, 0}, {HID_KEY_LEFTBRACE, 0}, {HID_KEY_APOSTROPHE, 0}, {0, HID_KBD_MODIFIER_RIGHT_SHIFT}, {0, HID_KBD_MODIFIER_RIGHT_CTRL},
+
+/*6*/	{HID_KEY_F12, 0},	{HID_KEY_EQUAL, 0},	{HID_KEY_RIGHTBRACE, 0},{HID_KEY_ENTER, 0}, {0, 0},		 {HID_KEY_LEFT, 0},
+/*7*/	{HID_KEY_SYSRQ, 0},	{HID_KEY_BACKSPACE, 0}, {HID_KEY_BACKSLASH, 0}, {0, 0},	    	    {HID_KEY_UP, 0},	 {HID_KEY_DOWN, 0},
+/*8*/	{0, 0},			{HID_KEY_INSERT, 0},	{HID_KEY_DELETE, 0},	{0, 0},	    	    {0, 0},		 {HID_KEY_RIGHT, 0},
+/*9*/	{HID_KEY_PAUSE, 0},	{HID_KEY_HOME, 0},	{HID_KEY_END, 0},	{0, 0},	    	    {HID_KEY_KPPLUS, 0}, {HID_KEY_KPENTER, 0},
+/*10*/	{HID_KEY_KPMINUS, 0},	{HID_KEY_PAGEUP, 0},	{HID_KEY_PAGEDOWN, 0},	{0, 0},	    	    {0, 0},		 {0, 0},
+};
+
+K_MUTEX_DEFINE(report_mutex);
 
 // HID ops
 static void in_ready_cb(const struct device *dev);
@@ -131,7 +155,7 @@ static const struct hid_ops kbd_ops = {
 
 static void in_ready_cb(const struct device *dev) {
 	ARG_UNUSED(dev);
-	LOG_DBG(">> USB in ready");
+	//LOG_DBG(">> USB in ready");
 	k_sem_give(&usb_sem);
 }
 
@@ -158,6 +182,7 @@ static void kb_callback(const struct device *dev, uint32_t row, uint32_t col,
 	ARG_UNUSED(dev);
 
 	uint_fast8_t kcode = keymask[row][col];
+	k_mutex_lock(&report_mutex, K_FOREVER);
 	if (kcode == 0) {
 		if (pressed) {
 			report[0] |= modkeys[row][col];
@@ -171,6 +196,29 @@ static void kb_callback(const struct device *dev, uint32_t row, uint32_t col,
 			report[REPORT_IDX(kcode)] &= ~REPORT_MASK(kcode);
 		}
 	}
+	k_mutex_unlock(&report_mutex);
+	k_sem_give(&kscan_sem);
+}
+
+static void kb_uart_callback(const struct device *dev, uint32_t row, uint32_t col,
+			     bool pressed) {
+	ARG_UNUSED(dev);
+	ARG_UNUSED(col);
+
+	key_t kcode = coproc_keymask[row];
+	k_mutex_lock(&report_mutex, K_FOREVER);
+	if (kcode.code == 0) {
+		if (pressed)
+			report[0] |= kcode.mod;
+		else
+			report[0] &= ~kcode.mod;
+	} else {
+		if (pressed)
+			report[REPORT_IDX(kcode.code)] |= REPORT_MASK(kcode.code);
+		else
+			report[REPORT_IDX(kcode.code)] &= ~REPORT_MASK(kcode.code);
+	}
+	k_mutex_unlock(&report_mutex);
 	k_sem_give(&kscan_sem);
 }
 
@@ -214,7 +262,7 @@ void main(void) {
 		LOG_ERR("Failed to configure kscan");
 		return;
 	}
-	if (kscan_config(kscan_uart_dev, NULL) < 0) {
+	if (kscan_config(kscan_uart_dev, kb_uart_callback) < 0) {
 		LOG_ERR("Failed to configure uart kscan");
 	}
 
@@ -237,6 +285,8 @@ void main(void) {
 
 		k_sem_take(&kscan_sem, K_FOREVER);
 		k_sem_take(&usb_sem, K_FOREVER);
+		k_mutex_lock(&report_mutex, K_FOREVER);
 		hid_int_ep_write(hid_dev, report, sizeof(report), NULL);
+		k_mutex_unlock(&report_mutex);
 	}
 }
