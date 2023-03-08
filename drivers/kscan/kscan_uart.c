@@ -12,6 +12,8 @@
 #define LOG_LEVEL LOG_LEVEL_DBG
 LOG_MODULE_REGISTER(uart_kscan, CONFIG_KSCAN_LOG_LEVEL);
 
+#define BUFFER_CNT 2
+#define PACKET_LEN 8
 #define TASK_STACK_SIZE 1024
 
 struct kscan_uart_config {
@@ -22,37 +24,84 @@ struct kscan_uart_config {
 };
 
 struct kscan_uart_data {
-	uint64_t prev_state;
+	/* kscan thread specific stuff */
 	atomic_t enable;
-
-	const struct device *dev;
 	kscan_callback_t callback;
 	struct k_thread thread;
-	struct k_sem rx_sem;
 	K_KERNEL_STACK_MEMBER(thread_stack, TASK_STACK_SIZE);
+
+	/* Previous key state */
+	uint64_t prev_state;
+
+	/* UART related variables, used to communicate to coproc */
+	const struct device *uart_dev;
+	struct k_sem rx_sem;
+	struct k_mutex buf_mutex;
+	uint8_t *buf_ptr;
+	uint8_t buffers[BUFFER_CNT][PACKET_LEN];
+	int curr_buff; // Buffer uart is reading to
+	int next_buff; // Buffer given to uart to use after curr_buff is done being used
+
 };
 
-static void rkey_read_callback(const struct device *dev, struct uart_event *evt, void *user_data) {
+static void uart_callback(const struct device *dev, struct uart_event *evt, void *user_data);
+static void polling_task(const struct device *dev, void *dummy2, void *dummy3);
+
+static void uart_callback(const struct device *dev, struct uart_event *evt, void *user_data) {
 	ARG_UNUSED(dev);
+
+	int ret, temp;
 	struct kscan_uart_data *const data = (struct kscan_uart_data *const)user_data;
 
+	LOG_DBG("[ev] %u", evt->type);
+
 	switch (evt->type) {
-	case UART_RX_BUF_RELEASED:
-		k_sem_give(&data->rx_sem);
+	case UART_RX_BUF_REQUEST: // 3
+		LOG_INF("[giving] %d", data->next_buff);
+
+		k_mutex_lock(&data->buf_mutex, K_FOREVER);
+		ret = uart_rx_buf_rsp(data->uart_dev, data->buffers[data->next_buff], PACKET_LEN);
+		k_mutex_unlock(&data->buf_mutex);
+
+		if (unlikely(ret < 0)) {
+			LOG_ERR("Receive buff request failed: %d", ret);
+		}
 		break;
+	case UART_RX_BUF_RELEASED: // 4
+		LOG_INF("[released] %d. [gave] %d", data->curr_buff, data->next_buff);
+
+		k_mutex_lock(&data->buf_mutex, K_FOREVER);
+		data->buf_ptr = data->buffers[data->curr_buff];
+		k_mutex_unlock(&data->buf_mutex);
+		k_sem_give(&data->rx_sem);
+
+		/*
+		 * We gave $next_buff in previous BUF_REQUEST, so now $next_buff
+		 * is $curr_buff. This leaves the buffer that was just released
+		 * ($curr_buff) avaliable as $next_buff. This effectively means
+		 * the buffers have flipped. Do that fliping
+		 */
+		temp = data->curr_buff;
+		data->curr_buff = data->next_buff;
+		data->next_buff = temp;
+		break;
+	case UART_RX_STOPPED: // 6
+		LOG_ERR("ERROR: rx stopped %u", evt->data.rx_stop.reason);
+		break;
+	case UART_RX_RDY: // 2
 	default:
 		break;
 	}
 }
 
-void uart_scan(const struct device *dev, void *dummy2, void *dummy3) {
-	//const struct kscan_uart_config *const cfg = dev->config;
-	struct kscan_uart_data *const data = dev->data;
-	int ret;
-	uint8_t rx_buf[8] = {0};
-	uint64_t raw, diff;
+static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
+	ARG_UNUSED(dummy2);
+	ARG_UNUSED(dummy3);
 
-	raw = 0;
+	uint64_t diff;
+	uint64_t raw = 0;
+	struct kscan_uart_data *const data = dev->data;
+
 	while (true) {
 		k_usleep(10);
 		k_yield();
@@ -60,15 +109,12 @@ void uart_scan(const struct device *dev, void *dummy2, void *dummy3) {
 			k_msleep(100);
 			continue;
 		}
-		ret = uart_rx_enable(data->dev, rx_buf, sizeof(rx_buf), SYS_FOREVER_MS);
-		if (unlikely(ret < 0)) {
-			LOG_ERR("rx enable failed");
-			continue;
-		}
-		k_sem_take(&data->rx_sem, K_FOREVER);
-		memcpy(&raw, rx_buf, sizeof(rx_buf));
 
-		LOG_INF(">data> 0x%llX", raw);
+		k_sem_take(&data->rx_sem, K_FOREVER);
+		k_mutex_lock(&data->buf_mutex, K_FOREVER);
+		memcpy(&raw, data->buf_ptr, PACKET_LEN);
+		k_mutex_unlock(&data->buf_mutex);
+
 		diff = raw ^ data->prev_state;
 		if (diff != 0) {
 			for (int i = 0; i < 64; i++) {
@@ -85,6 +131,17 @@ static int uart_kscan_init(const struct device *dev) {
 	const struct kscan_uart_config *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
 
+	/* Init semaphore + atomic */
+	k_mutex_init(&data->buf_mutex);
+	k_sem_init(&data->rx_sem, 0, 1);
+	atomic_set(&data->enable, 0);
+
+	/* Init normal variables*/
+	data->prev_state = 0;
+	data->curr_buff = 0;
+	data->next_buff = 1;
+
+	/* Configure RESET/BOOT0 pins*/
 	if (pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT) < 0) {
 		LOG_ERR("Failed to apply pinctrl");
 		return -ENODEV;
@@ -100,30 +157,23 @@ static int uart_kscan_init(const struct device *dev) {
 	}
 	gpio_pin_configure_dt(&cfg->reset, GPIO_OUTPUT_LOW);
 
-	/* Init semaphore + atomic */
-	k_sem_init(&data->rx_sem, 0, 1);
-	atomic_set(&data->enable, 0);
-	data->prev_state = 0;
-
 	/* Init UART */
-	data->dev = DEVICE_DT_GET(DT_INST_BUS(0));
-	if (!device_is_ready(data->dev)) {
+	data->uart_dev = DEVICE_DT_GET(DT_INST_BUS(0));
+	if (!device_is_ready(data->uart_dev)) {
 		LOG_ERR("Bus device is not ready");
 		return -ENODEV;
 	}
-
-	if (!device_is_ready(data->dev)) {
+	if (!device_is_ready(data->uart_dev)) {
 		LOG_ERR("Failed to initialize uart");
 		return -ENODEV;
 	}
-
-	if (uart_callback_set(data->dev, rkey_read_callback, (void *)data) < 0) {
+	if (uart_callback_set(data->uart_dev, uart_callback, (void *)data) < 0) {
 		LOG_ERR("Failed to set callback");
 		return -ENODEV;
 	}
 
 	k_thread_create(&data->thread, data->thread_stack, TASK_STACK_SIZE,
-			(k_thread_entry_t)uart_scan, (void *)dev, NULL, NULL,
+			(k_thread_entry_t)polling_task, (void *)dev, NULL, NULL,
 			K_PRIO_COOP(4), 0, K_NO_WAIT);
 	return 0;
 }
@@ -137,26 +187,42 @@ static int uart_kscan_configure(const struct device *dev, kscan_callback_t callb
 	return 0;
 }
 static int uart_kscan_enable_callback(const struct device *dev) {
-	const struct kscan_uart_config *const cfg = dev->config;
+	int ret;
+	struct kscan_uart_config const *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
-	if (unlikely(gpio_pin_set_dt(&cfg->reset, 1) < 0)) {
+
+	ret = gpio_pin_set_dt(&cfg->reset, 1);
+	if (unlikely(ret < 0)) {
 		LOG_ERR("Failed to start coproc");
 		return -ENODEV;
 	}
 	/* Give some time for the keyboard to startup*/
 	k_busy_wait(1000);
+
+	ret = uart_rx_enable(data->uart_dev, data->buffers[data->curr_buff], PACKET_LEN, SYS_FOREVER_MS);
+	if (unlikely(ret < 0)) {
+		LOG_ERR("rx enable failed");
+		return -ENODEV;
+	}
 	atomic_set(&data->enable, 1);
 	return 0;
 }
 static int uart_kscan_disable_callback(const struct device *dev) {
+	int ret = 0;
 	const struct kscan_uart_config *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
+
+	/* Not tested lol */
+	if (unlikely(uart_rx_disable(data->uart_dev) < 0)) {
+		LOG_ERR("Failed to disable rx");
+		ret = -ENODEV;
+	}
 	if (unlikely(gpio_pin_set_dt(&cfg->reset, 0) < 0)) {
 		LOG_ERR("Failed to stop coproc");
-		return -ENODEV;
+		ret = -ENODEV;
 	}
 	atomic_clear(&data->enable);
-	return 0;
+	return ret;
 }
 
 static const struct kscan_driver_api kscan_uart_driver_api = {
