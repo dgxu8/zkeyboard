@@ -47,6 +47,27 @@ struct kscan_uart_data {
 static void uart_callback(const struct device *dev, struct uart_event *evt, void *user_data);
 static void polling_task(const struct device *dev, void *dummy2, void *dummy3);
 
+int kscan_uart_set_led(const struct device *dev, uint8_t led, uint8_t value) {
+	struct kscan_uart_data *const data = dev->data;
+	uint8_t tx_buff[2];
+	static int prev_val = 0;
+
+	value = !!value;
+
+	if (prev_val == value)
+		return 0;
+
+	tx_buff[0] = led;
+	tx_buff[1] = value;
+	if (unlikely(uart_tx(data->uart_dev, tx_buff, sizeof(tx_buff), SYS_FOREVER_US) < 0)) {
+		LOG_ERR("Failed to transmit UART");
+		return -1;
+	}
+	prev_val = value;
+
+	return 0;
+}
+
 static void uart_callback(const struct device *dev, struct uart_event *evt, void *user_data) {
 	ARG_UNUSED(dev);
 

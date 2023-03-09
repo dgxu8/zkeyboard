@@ -16,6 +16,7 @@
 #include <stm32l1xx_hal.h>
 
 #include "drivers/kscan_gpio.h"
+#include "drivers/kscan_uart.h"
 
 #include <zephyr/logging/log.h>
 #define LOG_LEVEL LOG_LEVEL_DBG
@@ -135,7 +136,7 @@ static key_t coproc_keymask[] = {
 
 /*6*/	{HID_KEY_F12, 0},	{HID_KEY_EQUAL, 0},	{HID_KEY_RIGHTBRACE, 0},{HID_KEY_ENTER, 0}, {0, 0},		 {HID_KEY_LEFT, 0},
 /*7*/	{HID_KEY_SYSRQ, 0},	{HID_KEY_BACKSPACE, 0}, {HID_KEY_BACKSLASH, 0}, {0, 0},	    	    {HID_KEY_UP, 0},	 {HID_KEY_DOWN, 0},
-/*8*/	{0, 0},			{HID_KEY_INSERT, 0},	{HID_KEY_DELETE, 0},	{0, 0},	    	    {0, 0},		 {HID_KEY_RIGHT, 0},
+/*8*/	{HID_KEY_NUMLOCK, 0},	{HID_KEY_INSERT, 0},	{HID_KEY_DELETE, 0},	{0, 0},	    	    {0, 0},		 {HID_KEY_RIGHT, 0},
 /*9*/	{HID_KEY_PAUSE, 0},	{HID_KEY_HOME, 0},	{HID_KEY_END, 0},	{0, 0},	    	    {HID_KEY_KPPLUS, 0}, {HID_KEY_KPENTER, 0},
 /*10*/	{HID_KEY_KPMINUS, 0},	{HID_KEY_PAGEUP, 0},	{HID_KEY_PAGEDOWN, 0},	{0, 0},	    	    {0, 0},		 {0, 0},
 };
@@ -155,7 +156,6 @@ static const struct hid_ops kbd_ops = {
 
 static void in_ready_cb(const struct device *dev) {
 	ARG_UNUSED(dev);
-	//LOG_DBG(">> USB in ready");
 	k_sem_give(&usb_sem);
 }
 
@@ -167,7 +167,8 @@ static void out_ready_cb(const struct device *dev) {
 	}
 	if (ret > 0) {
 		LOG_INF(">> USB out size = %u, val = %u", ret, data);
-		gpio_pin_set_dt(&caps, data & 0x2);
+		gpio_pin_set_dt(&caps, data & HID_KBD_LED_CAPS_LOCK);
+		kscan_uart_set_led(kscan_uart_dev, NUM_LOCK_LED, data & HID_KBD_LED_NUM_LOCK);
 	} else {
 		LOG_INF("USB out nothing ret");
 	}
