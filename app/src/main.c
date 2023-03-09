@@ -100,31 +100,23 @@ static const uint8_t hid_kbd_report_desc[] = {
 	HID_END_COLLECTION,					\
 };
 
-// Table for keymasks
-static uint8_t keymask[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
-	{HID_KEY_ESC,	      HID_KEY_F1, HID_KEY_F2, HID_KEY_F3, HID_KEY_F4,	 HID_KEY_F5, HID_KEY_5},
-	{	   0,	   HID_KEY_GRAVE,  HID_KEY_1,  HID_KEY_2,  HID_KEY_3,	  HID_KEY_4, HID_KEY_T},
-	{	   0,	     HID_KEY_TAB,  HID_KEY_Q,  HID_KEY_W,  HID_KEY_E,	  HID_KEY_R, HID_KEY_G},
-	{	   0,	HID_KEY_CAPSLOCK,  HID_KEY_A,  HID_KEY_S,  HID_KEY_D,	  HID_KEY_F, HID_KEY_B},
-	{	   0,	    /*Lshift*/ 0,  HID_KEY_Z,  HID_KEY_X,  HID_KEY_C,	  HID_KEY_V, HID_KEY_UP},
-	{	   0,	     /*Lctrl*/ 0,  /*Lui*/ 0,  /*mod*/ 0, /*Lalt*/ 0, HID_KEY_SPACE, HID_KEY_ENTER},
-};
-static uint8_t modkeys[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
-	{0, 0, 0, 0, 0, 0, 0},
-	{0, 0, 0, 0, 0, 0, 0},
-	{0, 0, 0, 0, 0, 0, 0},
-	{0, 0, 0, 0, 0, 0, 0},
-	{0, HID_KBD_MODIFIER_LEFT_SHIFT, 0, 0, 0, 0, 0},
-	{0, HID_KBD_MODIFIER_LEFT_CTRL, HID_KBD_MODIFIER_LEFT_UI, 0, HID_KBD_MODIFIER_LEFT_ALT, 0, 0},
-};
-static uint8_t report[14] = {0};
-
 typedef struct {
-	enum hid_kbd_code code;
-	enum hid_kbd_modifier mod;
+	uint8_t code;	// enum hid_kbd_code
+	uint8_t mod;	// enum hid_kbd_modifier
 } key_t;
 
+// Table for keymasks
+static key_t left_keymask[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
+/*0*/	{{HID_KEY_ESC, 0}, {HID_KEY_F1, 0},	  {HID_KEY_F2, 0}, {HID_KEY_F3, 0}, {HID_KEY_F4, 0}, {HID_KEY_F5, 0}, {HID_KEY_5, 0}},
+/*1*/	{{0, 0},	   {HID_KEY_GRAVE, 0},	  {HID_KEY_1, 0},  {HID_KEY_2, 0},  {HID_KEY_3, 0},  {HID_KEY_4, 0},  {HID_KEY_T, 0}},
+/*2*/	{{0, 0},	   {HID_KEY_TAB, 0},	  {HID_KEY_Q, 0},  {HID_KEY_W, 0},  {HID_KEY_E, 0},  {HID_KEY_R, 0},  {HID_KEY_G, 0}},
+/*3*/	{{0, 0},	   {HID_KEY_CAPSLOCK, 0}, {HID_KEY_A, 0},  {HID_KEY_S, 0},  {HID_KEY_D, 0},  {HID_KEY_F, 0},  {HID_KEY_B, 0}},
 
+/*4*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_SHIFT}, {HID_KEY_Z, 0},			{HID_KEY_X, 0},  {HID_KEY_C, 0},		 {HID_KEY_V, 0},     {HID_KEY_UP, 0}},
+/*5*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_CTRL},  {0, HID_KBD_MODIFIER_LEFT_UI},	{0, 0},/*mod*/	 {0, HID_KBD_MODIFIER_LEFT_ALT}, {HID_KEY_SPACE, 0}, {HID_KEY_ENTER, 0}},
+};
+
+// The rows are column and columns are rows
 static key_t coproc_keymask[] = {
 /*0*/	{HID_KEY_F6, 0}, {HID_KEY_6, 0}, {HID_KEY_Y, 0}, {HID_KEY_H, 0}, 		{HID_KEY_N, 0}, 	{0, 0},
 /*1*/	{HID_KEY_F7, 0}, {HID_KEY_7, 0}, {HID_KEY_U, 0}, {HID_KEY_J, 0}, 		{HID_KEY_M, 0}, 	{HID_KEY_SPACE, 0},
@@ -140,6 +132,9 @@ static key_t coproc_keymask[] = {
 /*9*/	{HID_KEY_PAUSE, 0},	{HID_KEY_HOME, 0},	{HID_KEY_END, 0},	{0, 0},	    	    {HID_KEY_KPPLUS, 0}, {HID_KEY_KPENTER, 0},
 /*10*/	{HID_KEY_KPMINUS, 0},	{HID_KEY_PAGEUP, 0},	{HID_KEY_PAGEDOWN, 0},	{0, 0},	    	    {0, 0},		 {0, 0},
 };
+
+/* USB report array */
+static uint8_t report[14] = {0};
 
 K_MUTEX_DEFINE(report_mutex);
 
@@ -178,35 +173,7 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param) {
 	LOG_INF(">> Status %d", status);
 }
 
-static void kb_callback(const struct device *dev, uint32_t row, uint32_t col,
-			bool pressed) {
-	ARG_UNUSED(dev);
-
-	uint_fast8_t kcode = keymask[row][col];
-	k_mutex_lock(&report_mutex, K_FOREVER);
-	if (kcode == 0) {
-		if (pressed) {
-			report[0] |= modkeys[row][col];
-		} else {
-			report[0] &= ~modkeys[row][col];
-		}
-	} else {
-		if (pressed) {
-			report[REPORT_IDX(kcode)] |= REPORT_MASK(kcode);
-		} else {
-			report[REPORT_IDX(kcode)] &= ~REPORT_MASK(kcode);
-		}
-	}
-	k_mutex_unlock(&report_mutex);
-	k_sem_give(&kscan_sem);
-}
-
-static void kb_uart_callback(const struct device *dev, uint32_t row, uint32_t col,
-			     bool pressed) {
-	ARG_UNUSED(dev);
-	ARG_UNUSED(col);
-
-	key_t kcode = coproc_keymask[row];
+static inline void update_report(key_t kcode, bool pressed) {
 	k_mutex_lock(&report_mutex, K_FOREVER);
 	if (kcode.code == 0) {
 		if (pressed)
@@ -221,6 +188,19 @@ static void kb_uart_callback(const struct device *dev, uint32_t row, uint32_t co
 	}
 	k_mutex_unlock(&report_mutex);
 	k_sem_give(&kscan_sem);
+}
+
+static void kb_gpio_callback(const struct device *dev, uint32_t row, uint32_t col,
+			     bool pressed) {
+	ARG_UNUSED(dev);
+	update_report(left_keymask[row][col], pressed);
+}
+
+static void kb_uart_callback(const struct device *dev, uint32_t row, uint32_t col,
+			     bool pressed) {
+	ARG_UNUSED(dev);
+	ARG_UNUSED(col);
+	update_report(coproc_keymask[row], pressed);
 }
 
 static int configure_leds(const struct gpio_dt_spec * const gpio) {
@@ -259,7 +239,7 @@ void main(void) {
 
 	// Configure KSCAN
 	LOG_INF(">> Configuring kscan");
-	if (kscan_config(kscan_gpio_dev, kb_callback) < 0) {
+	if (kscan_config(kscan_gpio_dev, kb_gpio_callback) < 0) {
 		LOG_ERR("Failed to configure kscan");
 		return;
 	}
