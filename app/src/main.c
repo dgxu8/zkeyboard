@@ -105,36 +105,77 @@ typedef struct {
 	uint8_t mod;	// enum hid_kbd_modifier
 } key_t;
 
+#define NUMPAD_LAYERS 2
+#define LAYER_CNT 1
+#define LIST_LEN 64
+
+#define NUMPAD_KEY 0xFF
+#define MOD_KEY 0xFE
+
+/* _row_col*/
+enum numpads_idx {
+	KP_0_0, KP_0_1, KP_0_2,
+	KP_1_0, KP_1_1, KP_1_2,
+	KP_2_0, KP_2_1, KP_2_2,
+	KP_3_0, KP_3_1, KP_3_2,
+	KP_4_0, KP_4_1, KP_4_2,
+	NUMPAD_LEN,
+};
+const uint8_t numpad_masks[NUMPAD_LAYERS][NUMPAD_LEN] = {{
+	/* Mask when num lock is disabled */
+	HID_KEY_INSERT, HID_KEY_HOME, HID_KEY_PAGEUP,
+	HID_KEY_DELETE, HID_KEY_END,  HID_KEY_PAGEDOWN,
+	0,		0, 	      0,
+	0, 		HID_KEY_UP,   0,
+	HID_KEY_LEFT, 	HID_KEY_DOWN, HID_KEY_RIGHT,
+	},{
+	/* Mask when num lock is enabled */
+	HID_KEY_NUMLOCK, HID_KEY_KPSLASH, HID_KEY_KPASTERISK,
+	HID_KEY_KP_7, HID_KEY_KP_8, HID_KEY_KP_9,
+	HID_KEY_KP_4, HID_KEY_KP_5, HID_KEY_KP_6,
+	HID_KEY_KP_1, HID_KEY_KP_2, HID_KEY_KP_3,
+	HID_KEY_KP_0, HID_KEY_KP_0, HID_KEY_DOT
+}};
+
+typedef key_t matrix_mask_t[KSCAN_ROW_LEN][KSCAN_COL_LEN];
+typedef key_t list_mask_t[LIST_LEN];
+
 // Table for keymasks
-static key_t left_keymask[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
+//static key_t left_keymask_dflt[KSCAN_ROW_LEN][KSCAN_COL_LEN] = {
+static matrix_mask_t left_keymask_dflt = {
 /*0*/	{{HID_KEY_ESC, 0}, {HID_KEY_F1, 0},	  {HID_KEY_F2, 0}, {HID_KEY_F3, 0}, {HID_KEY_F4, 0}, {HID_KEY_F5, 0}, {HID_KEY_5, 0}},
 /*1*/	{{0, 0},	   {HID_KEY_GRAVE, 0},	  {HID_KEY_1, 0},  {HID_KEY_2, 0},  {HID_KEY_3, 0},  {HID_KEY_4, 0},  {HID_KEY_T, 0}},
 /*2*/	{{0, 0},	   {HID_KEY_TAB, 0},	  {HID_KEY_Q, 0},  {HID_KEY_W, 0},  {HID_KEY_E, 0},  {HID_KEY_R, 0},  {HID_KEY_G, 0}},
 /*3*/	{{0, 0},	   {HID_KEY_CAPSLOCK, 0}, {HID_KEY_A, 0},  {HID_KEY_S, 0},  {HID_KEY_D, 0},  {HID_KEY_F, 0},  {HID_KEY_B, 0}},
 
-/*4*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_SHIFT}, {HID_KEY_Z, 0},			{HID_KEY_X, 0},  {HID_KEY_C, 0},		 {HID_KEY_V, 0},     {HID_KEY_UP, 0}},
-/*5*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_CTRL},  {0, HID_KBD_MODIFIER_LEFT_UI},	{0, 0},/*mod*/	 {0, HID_KBD_MODIFIER_LEFT_ALT}, {HID_KEY_SPACE, 0}, {HID_KEY_ENTER, 0}},
+/*4*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_SHIFT}, {HID_KEY_Z, 0},			{HID_KEY_X, 0}, {HID_KEY_C, 0},			{HID_KEY_V, 0},     {HID_KEY_UP, 0}},
+/*5*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_CTRL},  {0, HID_KBD_MODIFIER_LEFT_UI},	{MOD_KEY, 0},	{0, HID_KBD_MODIFIER_LEFT_ALT}, {HID_KEY_SPACE, 0}, {HID_KEY_ENTER, 0}},
 };
 
 // The rows are column and columns are rows
-static key_t coproc_keymask[] = {
-/*0*/	{HID_KEY_F6, 0}, {HID_KEY_6, 0}, {HID_KEY_Y, 0}, {HID_KEY_H, 0}, 		{HID_KEY_N, 0}, 	{0, 0},
-/*1*/	{HID_KEY_F7, 0}, {HID_KEY_7, 0}, {HID_KEY_U, 0}, {HID_KEY_J, 0}, 		{HID_KEY_M, 0}, 	{HID_KEY_SPACE, 0},
-/*2*/	{HID_KEY_F8, 0}, {HID_KEY_8, 0}, {HID_KEY_I, 0}, {HID_KEY_K, 0}, 		{HID_KEY_COMMA, 0},	{0, HID_KBD_MODIFIER_RIGHT_ALT},
-/*3*/	{HID_KEY_F9, 0}, {HID_KEY_9, 0}, {HID_KEY_O, 0}, {HID_KEY_L, 0}, 		{HID_KEY_DOT, 0}, 	{0, HID_KBD_MODIFIER_RIGHT_UI},
-/*4*/	{HID_KEY_F10, 0}, {HID_KEY_0, 0}, {HID_KEY_P, 0}, {HID_KEY_SEMICOLON, 0},	{HID_KEY_SLASH, 0}, 	{0, 0},
+static list_mask_t uart_keymask_dflt = {
+/*0*/	{HID_KEY_F6, 0}, {HID_KEY_6, 0}, {HID_KEY_Y, 0}, {HID_KEY_H, 0},	  {HID_KEY_N, 0},     {0, 0},
+/*1*/	{HID_KEY_F7, 0}, {HID_KEY_7, 0}, {HID_KEY_U, 0}, {HID_KEY_J, 0},	  {HID_KEY_M, 0},     {HID_KEY_SPACE, 0},
+/*2*/	{HID_KEY_F8, 0}, {HID_KEY_8, 0}, {HID_KEY_I, 0}, {HID_KEY_K, 0},	  {HID_KEY_COMMA, 0}, {0, HID_KBD_MODIFIER_RIGHT_ALT},
+/*3*/	{HID_KEY_F9, 0}, {HID_KEY_9, 0}, {HID_KEY_O, 0}, {HID_KEY_L, 0},	  {HID_KEY_DOT, 0},   {0, HID_KBD_MODIFIER_RIGHT_UI},
+/*4*/	{HID_KEY_F10, 0}, {HID_KEY_0, 0}, {HID_KEY_P, 0}, {HID_KEY_SEMICOLON, 0}, {HID_KEY_SLASH, 0}, {MOD_KEY, 0},
 
 /*5*/	{HID_KEY_F11, 0}, {HID_KEY_MINUS, 0}, {HID_KEY_LEFTBRACE, 0}, {HID_KEY_APOSTROPHE, 0}, {0, HID_KBD_MODIFIER_RIGHT_SHIFT}, {0, HID_KBD_MODIFIER_RIGHT_CTRL},
 
-/*6*/	{HID_KEY_F12, 0},	{HID_KEY_EQUAL, 0},	{HID_KEY_RIGHTBRACE, 0},{HID_KEY_ENTER, 0}, {0, 0},		 {HID_KEY_LEFT, 0},
-/*7*/	{HID_KEY_SYSRQ, 0},	{HID_KEY_BACKSPACE, 0}, {HID_KEY_BACKSLASH, 0}, {0, 0},	    	    {HID_KEY_UP, 0},	 {HID_KEY_DOWN, 0},
-/*8*/	{HID_KEY_NUMLOCK, 0},	{HID_KEY_INSERT, 0},	{HID_KEY_DELETE, 0},	{0, 0},	    	    {0, 0},		 {HID_KEY_RIGHT, 0},
-/*9*/	{HID_KEY_PAUSE, 0},	{HID_KEY_HOME, 0},	{HID_KEY_END, 0},	{0, 0},	    	    {HID_KEY_KPPLUS, 0}, {HID_KEY_KPENTER, 0},
-/*10*/	{HID_KEY_KPMINUS, 0},	{HID_KEY_PAGEUP, 0},	{HID_KEY_PAGEDOWN, 0},	{0, 0},	    	    {0, 0},		 {0, 0},
+/*6*/	{HID_KEY_F12, 0},	{HID_KEY_EQUAL, 0},	{HID_KEY_RIGHTBRACE, 0},{HID_KEY_ENTER, 0}, {NUMPAD_KEY, KP_3_0},{NUMPAD_KEY, KP_4_0},
+/*7*/	{HID_KEY_SYSRQ, 0},	{HID_KEY_BACKSPACE, 0}, {HID_KEY_BACKSLASH, 0}, {NUMPAD_KEY, KP_2_0}, {NUMPAD_KEY, KP_3_1}, {NUMPAD_KEY, KP_4_1},
+/*8*/	{HID_KEY_NUMLOCK, 0},	{NUMPAD_KEY, KP_0_0},	{NUMPAD_KEY, KP_1_0},	{NUMPAD_KEY, KP_2_1}, {NUMPAD_KEY, KP_3_2}, {NUMPAD_KEY, KP_4_2},
+/*9*/	{HID_KEY_PAUSE, 0},	{NUMPAD_KEY, KP_0_1},	{NUMPAD_KEY, KP_1_1},	{NUMPAD_KEY, KP_2_2}, {HID_KEY_KPPLUS, 0}, {HID_KEY_KPENTER, 0},
+/*10*/	{HID_KEY_KPMINUS, 0},	{NUMPAD_KEY, KP_0_2},	{NUMPAD_KEY, KP_1_2},	{0, 0},
 };
+
+static matrix_mask_t *left_keymasks[LAYER_CNT] = {&left_keymask_dflt};
+static list_mask_t *coproc_keymasks[LAYER_CNT] = {&uart_keymask_dflt};
 
 /* USB report array */
 static uint8_t report[14] = {0};
+static uint_fast32_t layer = 0;
+static uint_fast8_t num_lock = false;
 
 K_MUTEX_DEFINE(report_mutex);
 
@@ -163,7 +204,9 @@ static void out_ready_cb(const struct device *dev) {
 	if (ret > 0) {
 		LOG_INF(">> USB out size = %u, val = %u", ret, data);
 		gpio_pin_set_dt(&caps, data & HID_KBD_LED_CAPS_LOCK);
-		kscan_uart_set_led(kscan_uart_dev, NUM_LOCK_LED, data & HID_KBD_LED_NUM_LOCK);
+
+		num_lock = !!(data & HID_KBD_LED_NUM_LOCK);
+		kscan_uart_set_led(kscan_uart_dev, NUM_LOCK_LED, num_lock);
 	} else {
 		LOG_INF("USB out nothing ret");
 	}
@@ -174,6 +217,10 @@ static void status_cb(enum usb_dc_status_code status, const uint8_t *param) {
 }
 
 static inline void update_report(key_t kcode, bool pressed) {
+	if (kcode.code == NUMPAD_KEY) {
+		kcode.code = numpad_masks[num_lock][kcode.mod];
+		kcode.mod = 0;
+	}
 	k_mutex_lock(&report_mutex, K_FOREVER);
 	if (kcode.code == 0) {
 		if (pressed)
@@ -193,14 +240,14 @@ static inline void update_report(key_t kcode, bool pressed) {
 static void kb_gpio_callback(const struct device *dev, uint32_t row, uint32_t col,
 			     bool pressed) {
 	ARG_UNUSED(dev);
-	update_report(left_keymask[row][col], pressed);
+	update_report((*left_keymasks[layer])[row][col], pressed);
 }
 
 static void kb_uart_callback(const struct device *dev, uint32_t row, uint32_t col,
 			     bool pressed) {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(col);
-	update_report(coproc_keymask[row], pressed);
+	update_report((*coproc_keymasks[layer])[row], pressed);
 }
 
 static int configure_leds(const struct gpio_dt_spec * const gpio) {

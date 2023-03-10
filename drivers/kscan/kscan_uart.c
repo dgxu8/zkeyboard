@@ -52,8 +52,6 @@ int kscan_uart_set_led(const struct device *dev, uint8_t led, uint8_t value) {
 	uint8_t tx_buff[2];
 	static int prev_val = 0;
 
-	value = !!value;
-
 	if (prev_val == value)
 		return 0;
 
