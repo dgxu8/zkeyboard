@@ -74,7 +74,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 
 	LOG_INF("Starting poll...");
 	while (true) {
-		k_usleep(10);
+		k_usleep(5);
 		k_yield();
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);
@@ -87,7 +87,6 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 				break;
 			}
 
-			//k_busy_wait(1);
 			ret = gpio_port_get_raw(rows_port, &val);
 			if (unlikely(ret < 0)) {
 				LOG_ERR("Failed to read port");

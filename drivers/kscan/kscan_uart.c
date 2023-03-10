@@ -149,6 +149,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 }
 
 static int uart_kscan_init(const struct device *dev) {
+	int ret;
 	const struct kscan_uart_config *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
 
@@ -193,6 +194,15 @@ static int uart_kscan_init(const struct device *dev) {
 		return -ENODEV;
 	}
 
+	/* Turn on coproc */
+	ret = gpio_pin_set_dt(&cfg->reset, 1);
+	if (unlikely(ret < 0)) {
+		LOG_ERR("Failed to start coproc");
+		return -ENODEV;
+	}
+	/* Give some time for the keyboard to startup*/
+	k_busy_wait(500);
+
 	k_thread_create(&data->thread, data->thread_stack, TASK_STACK_SIZE,
 			(k_thread_entry_t)polling_task, (void *)dev, NULL, NULL,
 			K_PRIO_COOP(4), 0, K_NO_WAIT);
@@ -209,16 +219,7 @@ static int uart_kscan_configure(const struct device *dev, kscan_callback_t callb
 }
 static int uart_kscan_enable_callback(const struct device *dev) {
 	int ret;
-	struct kscan_uart_config const *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
-
-	ret = gpio_pin_set_dt(&cfg->reset, 1);
-	if (unlikely(ret < 0)) {
-		LOG_ERR("Failed to start coproc");
-		return -ENODEV;
-	}
-	/* Give some time for the keyboard to startup*/
-	k_busy_wait(1000);
 
 	ret = uart_rx_enable(data->uart_dev, data->buffers[data->curr_buff], PACKET_LEN, SYS_FOREVER_MS);
 	if (unlikely(ret < 0)) {
@@ -230,16 +231,11 @@ static int uart_kscan_enable_callback(const struct device *dev) {
 }
 static int uart_kscan_disable_callback(const struct device *dev) {
 	int ret = 0;
-	const struct kscan_uart_config *const cfg = dev->config;
 	struct kscan_uart_data *const data = dev->data;
 
 	/* Not tested lol */
 	if (unlikely(uart_rx_disable(data->uart_dev) < 0)) {
 		LOG_ERR("Failed to disable rx");
-		ret = -ENODEV;
-	}
-	if (unlikely(gpio_pin_set_dt(&cfg->reset, 0) < 0)) {
-		LOG_ERR("Failed to stop coproc");
 		ret = -ENODEV;
 	}
 	atomic_clear(&data->enable);

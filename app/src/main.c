@@ -254,11 +254,8 @@ void main(void) {
 	}
 	k_busy_wait(USEC_PER_SEC);
 	LOG_INF("}} %u", sys_clock_hw_cycles_per_sec());
-	kscan_enable_callback(kscan_gpio_dev);
-
-	gpio_pin_set_dt(&leds[0], 1);
 	kscan_enable_callback(kscan_uart_dev);
-	gpio_pin_set_dt(&leds[1], 1);
+	kscan_enable_callback(kscan_gpio_dev);
 
 	LOG_INF(">> Starting main loop");
 	while (true) {
