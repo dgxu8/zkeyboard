@@ -14,6 +14,9 @@ LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 
 /* Defines */
 #define TASK_STACK_SIZE 1024
+#define DEBOUNCE_MS 8
+
+#define DEBOUNCE_TICKS (DEBOUNCE_MS * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000))
 
 #define COL_COUNT DT_INST_PROP_LEN(0, col_gpios)
 #define ROW_COUNT DT_INST_PROP_LEN(0, row_gpios)
@@ -34,7 +37,7 @@ struct kscan_gpio_config {
 
 struct kscan_gpio_data {
 	bool prev_state[COL_COUNT][ROW_COUNT];
-	uint8_t debounce[COL_COUNT][ROW_COUNT];
+	uint32_t debounce[COL_COUNT][ROW_COUNT];
 
 	kscan_callback_t callback;
 	struct k_thread thread;
@@ -87,6 +90,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 				break;
 			}
 
+			k_busy_wait(5);
 			ret = gpio_port_get_raw(rows_port, &val);
 			if (unlikely(ret < 0)) {
 				LOG_ERR("Failed to read port");
@@ -94,13 +98,12 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 			}
 
 			val >>= 1;
+			uint32_t cur_ms = k_cycle_get_32();
 			for (int r = 0; r < ROW_COUNT; r++) {
-				if (data->prev_state[c][r] != (val & 1) && data->debounce[c][r] == 0) {
-					data->debounce[c][r] = 10;
+				if (data->prev_state[c][r] != (val & 1) && (cur_ms - data->debounce[c][r]) > DEBOUNCE_TICKS) {
+					data->debounce[c][r] = cur_ms;
 					data->prev_state[c][r] = val & 1;
 					data->callback(dev, r, c, val & 1);
-				} else if (data->debounce[c][r] > 0) {
-					data->debounce[c][r]--;
 				}
 				val >>= 1;
 			}
@@ -110,6 +113,7 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 				LOG_ERR("Failed to set gpio %d", c);
 				break;
 			}
+			k_busy_wait(5);
 		}
 	}
 }
