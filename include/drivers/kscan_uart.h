@@ -5,6 +5,8 @@
 
 #define NUM_LOCK_LED 1
 
+#define KSCAN_UART_LEN 64
+
 int kscan_uart_set_led(const struct device *dev, uint8_t led, uint8_t value);
 
 #endif /* _KSCAN_GPIO_H */
