@@ -14,9 +14,11 @@ LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 
 /* Defines */
 #define TASK_STACK_SIZE 1024
-#define DEBOUNCE_MS 8
+#define LOCK_OUT_MS 8
 
-#define DEBOUNCE_TICKS (DEBOUNCE_MS * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000))
+#define LOCK_OUT_TICKS (LOCK_OUT_MS * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000))
+
+#define DEBOUNCE_MS 5
 
 #define COL_COUNT DT_INST_PROP_LEN(0, col_gpios)
 #define ROW_COUNT DT_INST_PROP_LEN(0, row_gpios)
@@ -63,58 +65,68 @@ static int init_gpio_list(struct gpio_dt_spec const *const gpios, size_t len, gp
 	return 0;
 }
 
+static void scan_matrix(struct kscan_gpio_config const *const cfg, uint32_t *col_state) {
+	int ret;
+	gpio_port_value_t val;
+	struct gpio_dt_spec const *const cols = cfg->col_gpios;
+	struct device const *const rows_port = cfg->row_gpios[0].port;
+
+	for (int c = 0; c < COL_COUNT; c++) {
+		ret = gpio_pin_set_dt(&cols[c], 1);
+		if (unlikely(ret < 0)) {
+			LOG_ERR("Failed to set gpio %d", c);
+		}
+
+		ret = gpio_port_get_raw(rows_port, &val);
+		if (unlikely(ret < 0)) {
+			LOG_ERR("Failed to read port");
+		}
+
+		col_state[c] = val >> 1;
+
+		ret = gpio_pin_set_dt(&cols[c], 0);
+		if (unlikely(ret < 0)) {
+			LOG_ERR("Failed to set gpio %d", c);
+		}
+	}
+}
+
 static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 	ARG_UNUSED(dummy2);
 	ARG_UNUSED(dummy3);
 
-	int ret;
 	struct kscan_gpio_data *const data = dev->data;
 	struct kscan_gpio_config const *const cfg = dev->config;
-	struct gpio_dt_spec const *const cols = cfg->col_gpios;
-	struct device const *const rows_port = cfg->row_gpios[0].port;
 
-	gpio_port_value_t val;
+	gpio_port_value_t val, prev_col, cur_col;
+	uint32_t prev_scan[COL_COUNT] = {0};
+	uint32_t scan[COL_COUNT];
 
 	LOG_INF("Starting poll...");
 	while (true) {
-		k_usleep(5);
 		k_yield();
+		k_msleep(DEBOUNCE_MS);
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);
 			continue;
 		}
+
+		scan_matrix(cfg, scan);
+
 		for (int c = 0; c < COL_COUNT; c++) {
-			ret = gpio_pin_set_dt(&cols[c], 1);
-			if (unlikely(ret < 0)) {
-				LOG_ERR("Failed to set gpio %d", c);
-				break;
-			}
-
-			k_busy_wait(5);
-			ret = gpio_port_get_raw(rows_port, &val);
-			if (unlikely(ret < 0)) {
-				LOG_ERR("Failed to read port");
-				break;
-			}
-
-			val >>= 1;
-			uint32_t cur_ms = k_cycle_get_32();
+			prev_col = prev_scan[c];
+			cur_col = scan[c];
 			for (int r = 0; r < ROW_COUNT; r++) {
-				if (data->prev_state[c][r] != (val & 1) && (cur_ms - data->debounce[c][r]) > DEBOUNCE_TICKS) {
-					data->debounce[c][r] = cur_ms;
-					data->prev_state[c][r] = val & 1;
-					data->callback(dev, r, c, val & 1);
+				val = prev_col & 1;
+				if (val == (cur_col & 1) && val != data->prev_state[c][r]) {
+					data->callback(dev, r, c, val);
+					data->prev_state[c][r] = val;
 				}
-				val >>= 1;
+				prev_col >>= 1;
+				cur_col >>= 1;
 			}
-
-			ret = gpio_pin_set_dt(&cols[c], 0);
-			if (unlikely(ret < 0)) {
-				LOG_ERR("Failed to set gpio %d", c);
-				break;
-			}
-			k_busy_wait(5);
 		}
+		memcpy(prev_scan, scan, sizeof(prev_scan));
 	}
 }
 
