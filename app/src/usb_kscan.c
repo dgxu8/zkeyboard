@@ -122,8 +122,8 @@ static matrix_mask_t left_keymask_dflt = {
 /*2*/	{{0, 0},	   {HID_KEY_TAB, 0},	  {HID_KEY_Q, 0},  {HID_KEY_W, 0},  {HID_KEY_E, 0},  {HID_KEY_R, 0},  {HID_KEY_G, 0}},
 /*3*/	{{0, 0},	   {HID_KEY_CAPSLOCK, 0}, {HID_KEY_A, 0},  {HID_KEY_S, 0},  {HID_KEY_D, 0},  {HID_KEY_F, 0},  {HID_KEY_B, 0}},
 
-/*4*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_SHIFT}, {HID_KEY_Z, 0},			{HID_KEY_X, 0}, {HID_KEY_C, 0},			{HID_KEY_V, 0},     {HID_KEY_UP, 0}},
-/*5*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_CTRL},  {0, HID_KBD_MODIFIER_LEFT_UI},	{MOD_KEY, 0},	{0, HID_KBD_MODIFIER_LEFT_ALT}, {HID_KEY_SPACE, 0}, {HID_KEY_SPACE, 0}},
+/*4*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_SHIFT}, {HID_KEY_Z, 0},			{HID_KEY_X, 0}, {HID_KEY_C, 0},			{HID_KEY_V, 0},     {HID_KEY_SPACE, 0}},
+/*5*/	{{0, 0}, {0, HID_KBD_MODIFIER_LEFT_CTRL},  {0, HID_KBD_MODIFIER_LEFT_UI},	{HID_KEY_NUMLOCK, 0, 0},	{0, HID_KBD_MODIFIER_LEFT_ALT}, {HID_KEY_SPACE, 0}, {HID_KEY_SPACE, 0}},
 };
 
 // The rows are column and columns are rows

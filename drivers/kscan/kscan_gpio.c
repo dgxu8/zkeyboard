@@ -16,8 +16,8 @@ LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 #define TASK_STACK_SIZE 1024
 
 #define MS_TO_TICKS(m) (m * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000))
-#define LOCK_OUT_MS 10
-#define DEBOUNCE_MS 5
+#define LOCK_OUT_MS 20
+#define DEBOUNCE_MS 10
 
 #define LOCK_OUT_TICKS MS_TO_TICKS(LOCK_OUT_MS)
 #define DEBOUNCE_TICKS MS_TO_TICKS(DEBOUNCE_MS)
@@ -84,6 +84,7 @@ static void scan_matrix(struct kscan_gpio_config const *const cfg, uint32_t *col
 			LOG_ERR("Failed to set gpio %d", c);
 		}
 
+		k_busy_wait(1);
 		ret = gpio_port_get_raw(rows_port, &val);
 		if (unlikely(ret < 0)) {
 			LOG_ERR("Failed to read port");
