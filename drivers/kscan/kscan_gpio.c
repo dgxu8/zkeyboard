@@ -14,11 +14,13 @@ LOG_MODULE_REGISTER(kscan, CONFIG_KSCAN_LOG_LEVEL);
 
 /* Defines */
 #define TASK_STACK_SIZE 1024
-#define LOCK_OUT_MS 8
 
-#define LOCK_OUT_TICKS (LOCK_OUT_MS * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000))
-
+#define MS_TO_TICKS(m) (m * (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000))
+#define LOCK_OUT_MS 10
 #define DEBOUNCE_MS 5
+
+#define LOCK_OUT_TICKS MS_TO_TICKS(LOCK_OUT_MS)
+#define DEBOUNCE_TICKS MS_TO_TICKS(DEBOUNCE_MS)
 
 #define COL_COUNT DT_INST_PROP_LEN(0, col_gpios)
 #define ROW_COUNT DT_INST_PROP_LEN(0, row_gpios)
@@ -39,7 +41,8 @@ struct kscan_gpio_config {
 
 struct kscan_gpio_data {
 	bool prev_state[COL_COUNT][ROW_COUNT];
-	uint32_t debounce[COL_COUNT][ROW_COUNT];
+	uint32_t rise_time[COL_COUNT][ROW_COUNT];
+	uint32_t fall_time[COL_COUNT][ROW_COUNT];
 
 	kscan_callback_t callback;
 	struct k_thread thread;
@@ -53,6 +56,10 @@ struct kscan_gpio_data {
  **/
 static int init_gpio_list(struct gpio_dt_spec const *const gpios, size_t len, gpio_flags_t flag);
 static void polling_task(const struct device *dev, void *dummy2, void *dummy3);
+static ALWAYS_INLINE void handle_column(const struct device *dev,
+					gpio_port_value_t prev_col,
+					gpio_port_value_t cur_col,
+					uint32_t col);
 
 static int init_gpio_list(struct gpio_dt_spec const *const gpios, size_t len, gpio_flags_t flag) {
 	for (int i = 0; i < len; i++) {
@@ -98,35 +105,55 @@ static void polling_task(const struct device *dev, void *dummy2, void *dummy3) {
 	struct kscan_gpio_data *const data = dev->data;
 	struct kscan_gpio_config const *const cfg = dev->config;
 
-	gpio_port_value_t val, prev_col, cur_col;
 	uint32_t prev_scan[COL_COUNT] = {0};
 	uint32_t scan[COL_COUNT];
 
 	LOG_INF("Starting poll...");
 	while (true) {
+		k_usleep(5);
 		k_yield();
-		k_msleep(DEBOUNCE_MS);
 		if (atomic_get(&data->enable) == 0) {
 			k_msleep(100);
 			continue;
 		}
 
 		scan_matrix(cfg, scan);
-
 		for (int c = 0; c < COL_COUNT; c++) {
-			prev_col = prev_scan[c];
-			cur_col = scan[c];
-			for (int r = 0; r < ROW_COUNT; r++) {
-				val = prev_col & 1;
-				if (val == (cur_col & 1) && val != data->prev_state[c][r]) {
-					data->callback(dev, r, c, val);
-					data->prev_state[c][r] = val;
-				}
-				prev_col >>= 1;
-				cur_col >>= 1;
-			}
+			handle_column(dev, prev_scan[c], scan[c], c);
 		}
 		memcpy(prev_scan, scan, sizeof(prev_scan));
+	}
+}
+
+static ALWAYS_INLINE void handle_column(const struct device *dev,
+					gpio_port_value_t prev_col,
+					gpio_port_value_t cur_col,
+					uint32_t col) {
+	gpio_port_value_t val, pval;
+	struct kscan_gpio_data *const data = dev->data;
+
+	uint32_t cur_ms = k_cycle_get_32();
+	for (int r = 0; r < ROW_COUNT; r++, prev_col >>= 1, cur_col >>= 1) {
+		val = cur_col & 1;
+		if (val == data->prev_state[col][r]) {
+			continue;
+		}
+
+		if (val == 1) {
+			data->rise_time[col][r] = cur_ms;
+		} else {
+			pval = prev_col & 1;
+			if (pval == 1) {
+				data->fall_time[col][r] = cur_ms;
+				continue;
+			}
+			if ((cur_ms - data->rise_time[col][r]) < LOCK_OUT_TICKS
+			 || (cur_ms - data->fall_time[col][r]) < DEBOUNCE_TICKS) {
+				continue;
+			}
+		}
+		data->prev_state[col][r] = val;
+		data->callback(dev, r, col, val);
 	}
 }
 
@@ -151,7 +178,8 @@ static int gpio_kscan_init(const struct device *dev) {
 
 	data->enable = ATOMIC_INIT(0);
 	memset(data->prev_state, 0, sizeof(data->prev_state));
-	memset(data->debounce, 0, sizeof(data->debounce));
+	memset(data->rise_time, 0, sizeof(data->rise_time));
+	memset(data->fall_time, 0, sizeof(data->fall_time));
 
 	k_thread_create(&data->thread, data->thread_stack, TASK_STACK_SIZE,
 		      (k_thread_entry_t)polling_task, (void *)dev, NULL, NULL,
